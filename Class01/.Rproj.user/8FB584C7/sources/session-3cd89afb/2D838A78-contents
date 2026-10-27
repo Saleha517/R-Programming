@@ -1,0 +1,138 @@
+# ============================================================
+# Messy Sales Data: Cleaning + Analysis in R
+# ============================================================
+ install.packages(c("readxl","dplyr","stringr","lubridate","janitor","readr","ggplot2","tidyr"))
+library(readxl); library(dplyr); library(stringr); library(lubridate)
+library(janitor); library(readr); library(ggplot2); library(tidyr)
+setwd("C:/Users/Teachers/Downloads")
+# ---------- 1. IMPORT ----------
+# Pehle 3 rows (title/notes) skip, sab columns text ki tarah taake kuch na bigray
+raw <- read_excel("messy_sales_data.xlsx", skip = 3, col_types = "text")
+glimpse(raw)
+
+# ---------- 2. CLEAN ----------
+df <- raw |>
+  clean_names() |>                                  # " Customer Name" -> customer_name
+  remove_empty("rows") |>                           # khali rows hatao
+  rename(unit_price = unit_price_rs, rating = rating_1_5) |>
+  filter(str_detect(order_id, "^ORD-")) |>          # subtotal / NOTE jaisi junk rows hatao
+  distinct() |>                                     # exact duplicates
+  mutate(
+    # --- text columns ---
+    customer_name = str_to_title(str_squish(customer_name)),
+    gender = case_when(str_to_lower(str_sub(gender, 1, 1)) == "m" ~ "Male",
+                       str_to_lower(str_sub(gender, 1, 1)) == "f" ~ "Female",
+                       TRUE ~ NA_character_),
+    city = case_when(str_to_lower(str_squish(city)) %in% c("karachi", "khi") ~ "Karachi",
+                     str_to_lower(str_squish(city)) %in% c("lahore", "lhr")  ~ "Lahore",
+                     str_to_lower(str_squish(city)) %in% c("islamabad", "isb") ~ "Islamabad",
+                     TRUE ~ str_to_title(str_squish(city))),
+    category = case_when(str_detect(str_to_lower(category), "^electronic") ~ "Electronics",
+                         str_detect(str_to_lower(category), "^cloth")      ~ "Clothing",
+                         str_detect(str_to_lower(category), "^grocer")     ~ "Grocery",
+                         str_detect(str_to_lower(category), "^book")       ~ "Books",
+                         str_detect(str_to_lower(category), "^home")       ~ "Home"),
+    payment = case_when(str_detect(str_to_lower(payment), "cash|cod") ~ "Cash on Delivery",
+                        str_detect(str_to_lower(payment), "card")     ~ "Card",
+                        str_detect(str_to_lower(payment), "jazz")     ~ "JazzCash",
+                        str_detect(str_to_lower(payment), "easy")     ~ "Easypaisa"),
+
+    # --- dates: Excel serial number, "15/03/2026", "Mar 15, 2026" sab mix ---
+    order_date = if_else(str_detect(order_date, "^\\d{5}$"), 
+                         as.Date(as.numeric(order_date), origin = "1899-12-30"),
+                         as.Date(parse_date_time(order_date, orders = c("Ymd", "dmY", "bdY")))),
+
+    # --- numbers ---
+    qty = recode(str_to_lower(qty), two = "2", three = "3"),
+    qty = suppressWarnings(as.numeric(qty)),
+    qty = if_else(qty > 0, qty, NA_real_),                         # -1 galat hai
+    unit_price = suppressWarnings(parse_number(unit_price)),       # "Rs. 1,200" -> 1200, "N/A" -> NA
+    rating = suppressWarnings(parse_number(rating)),
+    rating = if_else(rating %in% 1:5, rating, NA_real_),           # 0 aur 9 invalid
+    delivery_days = suppressWarnings(parse_number(delivery_days)),
+    delivery_days = if_else(delivery_days <= 30, delivery_days, NA_real_)  # 99 outlier
+  ) |>
+  # missing unit price: product ki median price se bharo
+  group_by(product) |>
+  mutate(unit_price = coalesce(unit_price, median(unit_price, na.rm = TRUE))) |>
+  ungroup() |>
+  mutate(total = qty * unit_price,                                # total dobara calculate
+         month = floor_date(order_date, "month"))
+
+# ---------- 3. CHECK QUALITY ----------
+colSums(is.na(df))        # har column me kitni missing values
+nrow(df)                  # duplicates hatne ke baad kitni rows
+summary(df)
+
+# ---------- 4. ANALYSIS ----------
+# (a) Category-wise revenue
+df |> group_by(category) |>
+  summarise(orders = n(), revenue = sum(total, na.rm = TRUE),
+            avg_rating = mean(rating, na.rm = TRUE)) |>
+  arrange(desc(revenue))
+
+# (b) City-wise revenue
+df |> group_by(city) |>
+  summarise(orders = n(), revenue = sum(total, na.rm = TRUE)) |> arrange(desc(revenue))
+
+# (c) Monthly trend
+monthly <- df |> group_by(month) |> summarise(revenue = sum(total, na.rm = TRUE))
+monthly
+
+# (d) Payment method share
+df |> count(payment) |> mutate(pct = round(100 * n / sum(n), 1))
+
+# (e) Kya delivery late hone se rating girti hai?
+cor.test(df$delivery_days, df$rating, use = "complete.obs")
+
+# (f) Kya cities ke darmiyan revenue ka farq significant hai? (ANOVA)
+summary(aov(total ~ city, data = df))
+
+# ---------- 5. PLOTS ----------
+ggplot(monthly, aes(month, revenue)) + geom_line() + geom_point() +
+  labs(title = "Monthly Revenue", x = NULL, y = "Rs.")
+
+df |> group_by(category) |> summarise(revenue = sum(total, na.rm = TRUE)) |>
+  ggplot(aes(reorder(category, revenue), revenue)) + geom_col() + coord_flip() +
+  labs(title = "Revenue by Category", x = NULL, y = "Rs.")
+
+ggplot(df, aes(city, total)) + geom_boxplot() + labs(title = "Order Value by City")
+ 
+# ---------- 6. SAVE CLEAN DATA ----------
+write_csv(df, "clean_sales_data.csv")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

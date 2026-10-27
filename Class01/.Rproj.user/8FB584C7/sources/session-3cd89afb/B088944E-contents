@@ -1,0 +1,26 @@
+install.packages("readr")
+library(readr)
+setwd("C:/Users/Teachers/Downloads")
+employee_data <- read.csv("employee_dataset_500.csv", check.names = FALSE)
+
+head(employee_data)
+
+View(employee_data)
+
+str(employee_data)
+
+summary(employee_data)
+
+install.packages("ggplot2")
+library(ggplot2)
+
+ggplot(employee_data, aes(x = Department, y = `Salary (PKR)`, fill = Department)) + 
+  geom_boxplot() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Salary Distribution across Departments", x = "Department", y = "Salary (PKR)")
+
+ggplot(employee_data, aes(y = City, fill = City)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(title = "Employee Distribution by City", x = "Number of Employees", y = "City")

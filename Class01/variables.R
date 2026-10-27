@@ -1,0 +1,34 @@
+print("Hello World")
+
+name <- "Saleha"
+age <- 17
+address <- "Pakistan, Karachi"
+
+print(name)
+print(age)
+print(address)
+
+
+a <- 10
+b <- 5
+
+print(a + b)
+print(a - b)
+print(a * b)
+print(a / b)
+
+a <- 200
+b <- 33
+
+if (b > a) {
+  print("b is greater than a")
+} else if (a == b) {
+  print("a and b are equal")
+} else {
+  print("a is greater than b")
+}
+
+print(a > b)
+print(a == b)
+print(a != b)
+
